@@ -3,11 +3,9 @@ from  __future__ import annotations
 import asyncio
 from copy import deepcopy
 from dataclasses import dataclass,field
-from json import tool
 from typing import Any,Awaitable,Callable,Protocol
 from uuid import uuid4
 from pydantic import BaseModel,ConfigDict,ValidationError
-from pyexpat.errors import messages
 
 '''
 实现执行框架
@@ -36,6 +34,12 @@ class Message:
     tool_calls:tuple[ToolCall,...]=() #元素全是T、长度任意的元组
     result:ToolResult | None=None   #表示ToolResult 或 None
 
+@dataclass(frozen=True)
+class ModelReply:
+    text: str | None = None
+    tool_calls: tuple[ToolCall, ...] = ()
+
+
 #如果携程data:dict={}，所有实例都会共用同一个字典，这里每个实例保存自己的字典
 @dataclass(frozen=True)
 class RuntimeEvent:
@@ -47,7 +51,7 @@ class RuntimeEvent:
 
 @dataclass(frozen=True)
 class RunResult:
-    test:str    #最终返回给用户的文本
+    text:str    #最终返回给用户的文本
     reason:str  #结束原因
     turns:int   #用来多少轮
     messages:list[Message]  #完整对话历史
@@ -77,12 +81,12 @@ class ToolSpec:
 
 class ToolRegistry:
     def __init__(self):
-        self.tools: dict[str, ToolSpec]={} #注册表
+        self._tools: dict[str, ToolSpec]={} #注册表
 
     def register(self,tool:ToolSpec)->None:
         if tool.name in self._tools:
             raise ValueError(f"重复工具名称:{tool.name}")
-        self.tools[tool.name]=tool
+        self._tools[tool.name]=tool
 
     #把注册表转换成模型可用工具描述,OpenAI/Anthropic常见格式
     def describe(self)->list[dict[str, Any]]:
@@ -150,4 +154,137 @@ class AgentRuntime:
         run_id=uuid4().hex # 生成唯一数值，本轮所有事件共享它
         messages=[Message(role="user",content=prompt)]
         seen_call_ids: set[str] = set() #本来所有出现过的call_id，用于跨轮去重。此为本轮，因为run()开始时候重置该数值，多轮run不受影响
-        
+        #统一事件记录器
+        def emit(
+                kind:str,
+                call:ToolCall | None=None,
+                **data:Any,
+        )->None:
+            events.append(
+                RuntimeEvent(
+                    seq=len(events)+1,
+                    run_id=run_id,
+                    kind=kind,
+                    call_id=call.call_id if call else None,
+                    data=deepcopy(data),
+                )
+            )
+        #统一结束本轮的出口
+        def finish(
+                reason:str,
+                turns:int,
+                text:str="",
+                error:str="",
+        )->RunResult:
+            kind=(
+                "run_completed"
+                if reason =="completed"
+                else "run_stopped"
+            )
+            emit(kind,reason=reason,answer=text,error=error)
+            return RunResult(
+                text,
+                reason,
+                turns,
+                messages,
+                events,
+            )
+        try:
+            #主循环请求模型
+            for turn in range(1,max_turns+1):
+                emit("model_requested",turn=turn)
+                try:
+                    reply=await self.model.complete(
+                        deepcopy(messages),#提供副本防止模型污染Runtime真实历史，隔离设计
+                        self.tools.describe(),
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    return finish(
+                        "model_error",
+                        turn,
+                        error=str(exc),
+                    )
+                if not isinstance(reply,ModelReply):
+                    return finish(
+                        "protocol_error",
+                        turn,
+                        error="模型返回类型错误",
+                    )
+                #互斥校验
+                if (reply.text is not None) == bool(reply.tool_calls):
+                    return finish(
+                        "protocol_error",
+                        turn,
+                        error="文本与工具必须二选一调动",
+                    )
+                #最终文本
+                if reply.text is not None:
+                    if(
+                        not isinstance(reply.text,str)
+                        or not reply.text.strip()
+                    ):
+                        return finish(
+                            "protocol_error",
+                            turn,
+                            error="最终文本不能为空",
+                        )
+                    messages.append(
+                        Message(
+                        role="assistant",
+                        content=reply.text,
+                        )
+                    )
+                    return finish(
+                        "completed",
+                        turn,
+                        text=reply.text,
+                    )
+                #工具调用基础校验
+                if any(
+                        not isinstance(call, ToolCall)
+                        or not isinstance(call.call_id, str)
+                        or not call.call_id
+                        or not isinstance(call.name, str)
+                        or not call.name
+                        for call in reply.tool_calls
+                ):
+                    return finish(
+                        "protocol_error",
+                        turn,
+                        error="工具调用标识无效",
+                    )
+                ids = [call.call_id for call in reply.tool_calls]
+
+                if (
+                        len(ids) != len(set(ids))
+                        or seen_call_ids.intersection(ids)
+                ):
+                    return finish(
+                        "protocol_error",
+                        turn,
+                        error="call_id 重复",
+                    )
+
+                seen_call_ids.update(ids)
+                messages.append(
+                    Message(
+                        role="assistant",
+                        tool_calls=reply.tool_calls,
+                    )
+                )
+
+                for call in reply.tool_calls:
+                    result = await self.tools.execute(call, emit)
+
+                    messages.append(
+                        Message(
+                            role="tool",
+                            result=result,
+                        )
+                    )
+            return finish("max_turns", max_turns)
+        except asyncio.CancelledError:
+            emit("run_cancelled")
+            raise

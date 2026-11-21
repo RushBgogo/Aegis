@@ -24,3 +24,10 @@ dist/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 本地密钥与临时验证目录
+config.local.json
+.env
+.env.*
+!.env.example
+.work/
