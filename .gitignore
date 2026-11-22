@@ -31,3 +31,6 @@ config.local.json
 .env.*
 !.env.example
 .work/
+
+# 本地数据库
+data/
