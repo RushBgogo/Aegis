@@ -209,6 +209,14 @@ class Repository:
                     state=target, version=nodes.c.version + 1))
             return result.rowcount == 1
 
+    def set_node_priority(self, task_id, node_id, priority):
+        with self.write() as conn:
+            self._task(conn, task_id, write=True)
+            result = conn.execute(update(nodes).where(nodes.c.id == node_id,
+                nodes.c.task_id == task_id, nodes.c.state == "open").values(
+                    priority=priority, version=nodes.c.version + 1))
+            return result.rowcount == 1
+
     def update_node(self, task_id, node_id, text, payload, expected_version):
         with self.write() as conn:
             self._task(conn, task_id, write=True)

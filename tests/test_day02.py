@@ -48,6 +48,11 @@ class RepositoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.repo.add_edge(self.tid, node["id"], foreign["id"], "yields")
 
+    def test_node_priority_update(self):
+        node = self.repo.create_node(self.tid, "intent", "priority")
+        self.assertTrue(self.repo.set_node_priority(self.tid, node["id"], 5))
+        self.assertEqual(self.repo.get_node(self.tid, node["id"])["priority"], 5)
+
     def test_node_state_vocabulary(self):
         node = self.repo.create_node(self.tid, "intent", "state")
         self.assertTrue(

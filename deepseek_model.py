@@ -8,7 +8,10 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpe
 from runtime import Message, ModelReply, ToolCall
 
 
-DEFAULT_SYSTEM_PROMPT = "你是计算助手。整数加法必须调用 add 工具，根据工具的实际结果回答。"
+DEFAULT_SYSTEM_PROMPT = (
+    "你是安全评估助手。只根据实际工具结果回答，不猜测证据；"
+    "需要执行动作时调用提供的工具。"
+)
 
 
 class DeepSeekModel:

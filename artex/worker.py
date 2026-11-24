@@ -22,7 +22,7 @@ DEFAULT_FIXTURES = {
 
 WORKER_SYSTEM_PROMPT = (
     "你是意图执行者。用户 JSON 给出 target。必须调用 observe(target)，"
-    "仅使用给定目标；根据实际工具结果回答。不要调用 add，不要猜测证据。"
+    "仅使用给定目标；根据实际工具结果回答。不要调用未提供的工具，不要猜测证据。"
 )
 
 
@@ -40,7 +40,7 @@ class FixtureModel:
 
 
 class WorkerDeepSeekModel:
-    """复用第一课传输；把 Worker 指令作为唯一 system prompt，避免与 add 指令冲突。"""
+    """复用第一课传输；把 Worker 指令作为唯一 system prompt，避免与其他工具指令冲突。"""
 
     def __init__(self, model_factory=None):
         if model_factory is None:
