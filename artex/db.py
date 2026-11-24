@@ -47,6 +47,15 @@ records = Table("records", metadata,
     Column("namespace", String(64), primary_key=True), Column("key", String(256), primary_key=True),
     Column("value", JSON, nullable=False), Column("version", Integer, nullable=False))
 
+# 跨日共享的节点词汇：新增状态时必须同步这里，避免 Worker/Planner 写入拼写错误。
+# Day3 使用 done/blocked；Day4 使用 met；Day19 使用 stopped。
+NODE_KINDS = {"goal", "intent", "fact", "finding", "hint", "digest"}
+NODE_STATES = {
+    "open", "running", "confirmed", "done", "failed",
+    "blocked", "met", "stopped", "cancelled",
+}
+EDGE_RELATIONS = {"spawns", "derived_from", "yields", "proves", "covers"}
+
 TASK_TRANSITIONS = {
     "created": {"running", "paused", "cancelled", "deleting"},
     "running": {"paused", "done", "failed", "cancelled", "deleting"},
@@ -139,8 +148,10 @@ class Repository:
             conn.execute(update(tasks).where(tasks.c.id == task_id).values(deadline=deadline))
 
     def create_node(self, task_id, kind, text, *, key=None, state=None, payload=None, priority=0):
-        if kind not in {"goal", "intent", "fact", "finding", "hint", "digest"}:
+        if kind not in NODE_KINDS:
             raise ValueError("invalid node kind")
+        if state is not None and state not in NODE_STATES:
+            raise ValueError("invalid node state")
         value = dict(id=uuid4().hex, task_id=task_id, kind=kind, text=text,
             dedup_key=key or uuid4().hex, state=state or ("open" if kind in {"goal", "intent"} else "confirmed"),
             priority=priority, payload=deepcopy(payload or {}), version=1, created_at=time.time())
@@ -189,6 +200,8 @@ class Repository:
             return result.rowcount == 1
 
     def transition_node(self, task_id, node_id, expected, target):
+        if target not in NODE_STATES:
+            raise ValueError("invalid node state")
         with self.write() as conn:
             self._task(conn, task_id, write=True)
             result = conn.execute(update(nodes).where(nodes.c.id == node_id,
@@ -205,7 +218,7 @@ class Repository:
             return result.rowcount == 1
 
     def add_edge(self, task_id, source_id, target_id, relation):
-        if relation not in {"spawns", "derived_from", "yields", "proves", "covers"}:
+        if relation not in EDGE_RELATIONS:
             raise ValueError("invalid edge relation")
         with self.write() as conn:
             self._task(conn, task_id, write=True)

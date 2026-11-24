@@ -8,8 +8,11 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpe
 from runtime import Message, ModelReply, ToolCall
 
 
+DEFAULT_SYSTEM_PROMPT = "你是计算助手。整数加法必须调用 add 工具，根据工具的实际结果回答。"
+
+
 class DeepSeekModel:
-    def __init__(self):
+    def __init__(self, system_prompt=None):
         # 以代码文件定位配置，在 PyCharm 或其他工作目录启动也能读取。
         config_path = Path(__file__).with_name("config.local.json")
         try:
@@ -24,6 +27,9 @@ class DeepSeekModel:
         api_key = config.get("api_key")
         if not isinstance(api_key, str) or not api_key.strip() or api_key == "YOUR_DEEPSEEK_API_KEY":
             raise ValueError("请在 config.local.json 中填写 api_key")
+        if system_prompt is not None and not isinstance(system_prompt, str):
+            raise TypeError("system_prompt 必须是字符串")
+        self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.model = config.get("model", "deepseek-flash")
         self.client = AsyncOpenAI(
             api_key=api_key.strip(),
@@ -41,7 +47,7 @@ class DeepSeekModel:
     async def complete(self, messages: list[Message], tools: list[dict]) -> ModelReply:
         api_messages = [{
             "role": "system",
-            "content": "你是计算助手。整数加法必须调用 add 工具，根据工具的实际结果回答。",
+            "content": self.system_prompt,
         }]
         for message in messages:
             if message.tool_calls:

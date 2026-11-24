@@ -48,6 +48,16 @@ class RepositoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.repo.add_edge(self.tid, node["id"], foreign["id"], "yields")
 
+    def test_node_state_vocabulary(self):
+        node = self.repo.create_node(self.tid, "intent", "state")
+        self.assertTrue(
+            self.repo.transition_node(self.tid, node["id"], "open", "blocked")
+        )
+        with self.assertRaises(ValueError):
+            self.repo.create_node(self.tid, "fact", "invalid", state="unknown")
+        with self.assertRaises(ValueError):
+            self.repo.transition_node(self.tid, node["id"], "blocked", "unknown")
+
     def test_restart_and_record_cas(self):
         self.assertTrue(self.repo.put_record("note", "x", {"a": 1}, self.tid))
         self.assertFalse(self.repo.put_record("note", "x", {"a": 2}, self.tid))
