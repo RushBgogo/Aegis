@@ -1,7 +1,7 @@
-"""兼容入口：运行 Day4 安全评估演示。"""
+"""兼容入口：运行 Day5 多 Worker 调度演示。"""
 import asyncio
 
-from artex.day04 import main
+from artex.day05 import main
 
 
 if __name__ == "__main__":
