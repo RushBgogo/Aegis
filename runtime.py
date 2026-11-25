@@ -144,6 +144,7 @@ class AgentRuntime:
             prompt:str,
             max_turns:int=5,
             events:list[RuntimeEvent] | None=None,
+            history:list[Message] | None=None,
     )->RunResult:
         if max_turns <1:
             raise ValueError("max_turns必须大于0")
@@ -152,8 +153,15 @@ class AgentRuntime:
         if events:
             raise ValueError("events必须是本次运行专用的空列表")
         run_id=uuid4().hex # 生成唯一数值，本轮所有事件共享它
-        messages=[Message(role="user",content=prompt)]
-        seen_call_ids: set[str] = set() #本来所有出现过的call_id，用于跨轮去重。此为本轮，因为run()开始时候重置该数值，多轮run不受影响
+        # history 不为空时继续已有会话；否则从一条 user 消息开始。
+        messages=deepcopy(history) if history is not None else [Message(role="user",content=prompt)]
+        if not messages:
+            raise ValueError("history cannot be empty")
+        seen_call_ids: set[str] = {
+            call.call_id
+            for message in messages
+            for call in message.tool_calls
+        } #包括历史中出现过的 call_id，防止恢复会话后重复使用
         #统一事件记录器
         def emit(
                 kind:str,

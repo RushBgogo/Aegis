@@ -1,7 +1,7 @@
-"""兼容入口：运行 Day6 生命周期演示。"""
+"""兼容入口：运行 Day7 操作账本演示。"""
 import asyncio
 
-from artex.day06 import main
+from artex.day07 import main
 
 
 if __name__ == "__main__":
