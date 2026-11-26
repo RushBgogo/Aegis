@@ -1,7 +1,7 @@
-"""兼容入口：运行 Day9 模型预算/重试/熔断演示。"""
+"""兼容入口：运行 Day10 上下文演示。"""
 import asyncio
 
-from artex.day09 import main
+from artex.day10 import main
 
 
 if __name__ == "__main__":
