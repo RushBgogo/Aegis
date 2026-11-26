@@ -1,7 +1,7 @@
-"""兼容入口：运行 Day12 HTTP 演示。"""
+"""兼容入口：运行 Day13 人工协作演示。"""
 import asyncio
 
-from artex.day12 import main
+from artex.day13 import main
 
 
 if __name__ == "__main__":
