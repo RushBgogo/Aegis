@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>Python ARTEX 学习台</title>
+<style>
+  body { font: 16px system-ui; max-width: 960px; margin: 36px auto; padding: 0 16px; }
+  input, button, select { font: inherit; padding: 8px; margin: 4px; }
+  pre { white-space: pre-wrap; background: #f3f5f7; padding: 16px; }
+  label { display: block; }
+  .row { margin: 8px 0; }
+</style>
+<h1>任务学习台</h1>
+<p>Token 只保存在本页内存；刷新后需要重新输入。</p>
+<label>API Token <input id="token" type="password" autocomplete="off"></label>
+<label>范围 URL <input id="scope" size="52" value="https://lab.example/public"></label>
+<label>模型
+  <select id="mode">
+    <option value="fixture">离线样例</option>
+    <option value="deepseek">DeepSeek</option>
+  </select>
+</label>
+<div class="row">
+  <button id="create">创建并运行</button>
+  <button id="list">任务列表</button>
+</div>
+<label>任务 ID <input id="tid" size="44"></label>
+<div class="row">
+  <button id="refresh">刷新详情</button>
+  <button id="pause">暂停</button>
+  <button id="resume">恢复</button>
+</div>
+<pre id="output">等待操作</pre>
+<script>
+  const el = (id) => document.getElementById(id);
+
+  async function api(path, method = "GET", body) {
+    const response = await fetch(path, {
+      method,
+      headers: {
+        "Authorization": "Bearer " + el("token").value,
+        "Content-Type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await response.json();
+    if (!response.ok) throw Error(JSON.stringify(data));
+    return data;
+  }
+
+  const show = (value) => {
+    el("output").textContent = JSON.stringify(value, null, 2);
+  };
+
+  const act = (fn) => async () => {
+    try {
+      await fn();
+    } catch (error) {
+      show({ error: error.message });
+    }
+  };
+
+  el("create").onclick = act(async () => {
+    const task = await api("/api/tasks", "POST", {
+      description: "本地学习样例",
+      goal: "给出可复核的评估结论",
+      scope: [el("scope").value],
+    });
+    el("tid").value = task.id;
+    show(await api(`/api/tasks/${task.id}/run`, "POST", {
+      model_mode: el("mode").value,
+    }));
+  });
+
+  el("list").onclick = act(async () => {
+    show(await api("/api/tasks"));
+  });
+
+  el("refresh").onclick = act(async () => {
+    const path = `/api/tasks/${el("tid").value}`;
+    show({
+      task: await api(path),
+      graph: await api(`${path}/graph`),
+      events: await api(`${path}/events`),
+    });
+  });
+
+  for (const action of ["pause", "resume"]) {
+    el(action).onclick = act(async () => {
+      const path = `/api/tasks/${el("tid").value}/${action}`;
+      show(await api(path, "POST"));
+    });
+  }
+</script>
+</html>

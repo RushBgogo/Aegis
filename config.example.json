@@ -1,5 +1,6 @@
 {
   "api_key": "YOUR_DEEPSEEK_API_KEY",
   "base_url": "https://api.deepseek.com",
-  "model": "deepseek-flash"
+  "model": "deepseek-flash",
+  "api_token": "GENERATE_A_LOCAL_RANDOM_TOKEN"
 }
