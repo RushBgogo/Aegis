@@ -1,7 +1,7 @@
-"""兼容入口：运行 Day13 人工协作演示。"""
+"""兼容入口：运行 Day14 资产同步/补全演示。"""
 import asyncio
 
-from artex.day13 import main
+from artex.day14 import main
 
 
 if __name__ == "__main__":
